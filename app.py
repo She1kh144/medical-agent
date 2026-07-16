@@ -53,7 +53,7 @@ def main() -> None:
         {
             "type": "function",
             "function": {
-                "name": "search_medical_knowledge",
+                "name": "medical_rag_search",
                 "description": (
                     "Ищет информацию о лекарственных препаратах "
                     "в медицинской базе знаний."
@@ -74,53 +74,58 @@ def main() -> None:
         }
     ]
 
-    response = client.chat.completions.create(
-        model="deepseek-v4-flash",
-        messages=messages,
-        tools=tools,
-        temperature=0,
-        max_tokens=200,
-        extra_body={"thinking": {"type": "disabled"}},
-    )
+    max_steps = 5
 
-    message = response.choices[0].message
+    for step in range(1, max_steps + 1):
+        print(f"\n--- Agent's step {step} ---")
 
-    print("Text:", message.content)
-
-    if message.tool_calls:
-        tool_call = cast(ChatCompletionMessageFunctionToolCall, message.tool_calls[0])
-
-        print("Tool name:", tool_call.function.name)
-        print("Arguments:", tool_call.function.arguments)
-
-        arguments = json.loads(tool_call.function.arguments)
-        query = arguments["query"]
-
-        tool_result = medical_rag_search(query)
-        print("Tool result:", tool_result)
-
-        # model_dump returns a dict, cast to the expected ChatCompletionMessageParam for typing
-        messages.append(cast(ChatCompletionMessageParam, message.model_dump(exclude_none=True)))
-
-        messages.append(
-            {
-                "role": "tool",
-                "tool_call_id": tool_call.id,
-                "content": tool_result,
-            }
-        )
-
-        final_response = client.chat.completions.create(
+        response = client.chat.completions.create(
             model="deepseek-v4-flash",
             messages=messages,
+            tools=tools,
             temperature=0,
+            max_tokens=500,
             extra_body={"thinking": {"type": "disabled"}},
         )
 
-        final_message = final_response.choices[0].message
-        print("Final answer:", final_message.content)
-    else:
-        print("The model did not request a tool.")
+        message = response.choices[0].message
+        messages.append(cast(ChatCompletionMessageParam, message.model_dump(exclude_none=True))) # To satisfy type checker
+
+        if not message.tool_calls:
+            print("Final answer:", message.content)
+            return
+
+        for tool_call in message.tool_calls:
+            tool_call = cast(ChatCompletionMessageFunctionToolCall, tool_call)
+
+            tool_name = tool_call.function.name
+            raw_arguments = tool_call.function.arguments
+
+            print("Tool name:", tool_name)
+            print("Arguments:", raw_arguments)
+
+            if tool_name == "medical_rag_search":
+                arguments = json.loads(raw_arguments)
+                query = arguments["query"]
+                tool_result = medical_rag_search(query)
+            else:
+                tool_result = (
+                    f"Error: Unknown tool '{tool_name}' called."
+                )
+
+            print("Tool result:", tool_result)
+
+            messages.append(
+                {
+                    "role": "tool",
+                    "tool_call_id": tool_call.id,
+                    "content": tool_result,
+                }
+            )
+
+    raise RuntimeError(
+        "Agent did not complete its task within the allowed number of steps."
+    )
 
 if __name__ == "__main__":
     main()
