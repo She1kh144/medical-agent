@@ -1,15 +1,22 @@
 import os
 import json
+import requests
 from dotenv import load_dotenv
 from typing import cast
 from openai import OpenAI
 from openai.types.chat import ChatCompletionMessageParam, ChatCompletionToolUnionParam, ChatCompletionMessageFunctionToolCall
 
-def search_medical_knowledge(query: str) -> str:
-    return (
-        "Статус поиска: медицинские документы пока не подключены. "
-        f"Получен запрос: {query}."
+def medical_rag_search(query: str) -> str:
+    response = requests.get(
+        "http://localhost:8000/search",
+        params={"query": query, "k": 5},
+        timeout=30,
     )
+
+    response.raise_for_status()
+    data = response.json()
+
+    return json.dumps(data, ensure_ascii=False)
 
 def main() -> None:
     # Load environment variables from .env file
@@ -29,7 +36,11 @@ def main() -> None:
                 "Отвечай только на основании медицинских фактов, содержащихся "
                 "в результате инструмента. Не используй свои внутренние знания. "
                 "Если результат не содержит медицинских фактов, ответь точно: "
-                "«В базе знаний недостаточно информации для ответа.»"
+                "'В предоставленных документах нет ответа на этот вопрос'"
+
+                "Не придумывай информацию, отсутствующую в контексте. "
+                "В конце ответа укажи источник из предоставленного контекста (не придумывай источники). "
+                "Всегда добавляй: 'Это не медицинская консультация, обратитесь к врачу.'"
             ),
         },
         {
@@ -85,7 +96,7 @@ def main() -> None:
         arguments = json.loads(tool_call.function.arguments)
         query = arguments["query"]
 
-        tool_result = search_medical_knowledge(query)
+        tool_result = medical_rag_search(query)
         print("Tool result:", tool_result)
 
         # model_dump returns a dict, cast to the expected ChatCompletionMessageParam for typing
@@ -103,7 +114,6 @@ def main() -> None:
             model="deepseek-v4-flash",
             messages=messages,
             temperature=0,
-            max_tokens=200,
             extra_body={"thinking": {"type": "disabled"}},
         )
 
