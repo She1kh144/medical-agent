@@ -18,6 +18,14 @@ def medical_rag_search(query: str) -> str:
 
     return json.dumps(data, ensure_ascii=False)
 
+def check_interaction(drug_a: str, drug_b: str) -> str:
+    query = (
+        f"Взаимодействие препаратов {drug_a} и {drug_b}. "
+        "Совместное применение, противопоказания и возможные риски."
+    )
+
+    return medical_rag_search(query)
+
 def main() -> None:
     # Load environment variables from .env file
     load_dotenv()
@@ -45,7 +53,7 @@ def main() -> None:
         },
         {
             "role": "user",
-            "content": "Найди информацию об ибупрофене.",
+            "content": "Можно ли принимать ибупрофен вместе с аспирином?",
         },
     ]
 
@@ -71,7 +79,33 @@ def main() -> None:
                     "required": ["query"],
                 },
             },
-        }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "check_interaction",
+                "description": (
+                    "Проверяет известные взаимодействия между двумя "
+                    "лекарственными препаратами по медицинской базе знаний. "
+                    "Используй этот инструмент, когда пользователь спрашивает "
+                    "о совместном применении двух препаратов."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "drug_a": {
+                            "type": "string",
+                            "description": "Название первого препарата.",
+                        },
+                        "drug_b": {
+                            "type": "string",
+                            "description": "Название второго препарата.",
+                        },
+                    },
+                    "required": ["drug_a", "drug_b"],
+                },
+            },
+        },
     ]
 
     max_steps = 5
@@ -101,19 +135,19 @@ def main() -> None:
             tool_name = tool_call.function.name
             raw_arguments = tool_call.function.arguments
 
+            arguments = json.loads(raw_arguments)
+
             print("Tool name:", tool_name)
             print("Arguments:", raw_arguments)
 
             if tool_name == "medical_rag_search":
-                arguments = json.loads(raw_arguments)
-                query = arguments["query"]
-                tool_result = medical_rag_search(query)
+                tool_result = medical_rag_search(arguments["query"])
+            elif tool_name == "check_interaction":
+                tool_result = check_interaction(arguments["drug_a"], arguments["drug_b"])
             else:
-                tool_result = (
-                    f"Error: Unknown tool '{tool_name}' called."
-                )
+                tool_result = f"Error: Unknown tool '{tool_name}' called."
 
-            print("Tool result:", tool_result)
+            #print("Tool result:", tool_result) # Prints raw chunks
 
             messages.append(
                 {
@@ -123,9 +157,7 @@ def main() -> None:
                 }
             )
 
-    raise RuntimeError(
-        "Agent did not complete its task within the allowed number of steps."
-    )
+    raise RuntimeError("Agent did not complete its task within the allowed number of steps.")
 
 if __name__ == "__main__":
     main()
