@@ -48,6 +48,14 @@ def pharmacy_inventory(drug: str) -> str:
 
     return json.dumps(result, ensure_ascii=False)
 
+def escalate_to_pharmacist(reason: str) -> str:
+    result = {
+        "outcome": "escalate",
+        "reason": reason,
+    }
+
+    return json.dumps(result, ensure_ascii=False)
+
 def main() -> None:
     # Load environment variables from .env file
     load_dotenv()
@@ -62,9 +70,9 @@ def main() -> None:
             "role": "system",
             "content": (
                 "Ты — помощник по медицинской информации. "
-                "Перед ответом на вопросы о лекарствах используй инструмент поиска. "
+                "Перед ответом выбери подходящий из доступных инструментов. "
                 "Отвечай только на основании медицинских фактов, содержащихся "
-                "в результате инструмента. Не используй свои внутренние знания. "
+                "в результате инструмента. Не используй свои внутренние знания. "   
                 "Если результат не содержит медицинских фактов, ответь точно: "
                 "'В предоставленных документах нет ответа на этот вопрос'"
 
@@ -75,7 +83,7 @@ def main() -> None:
         },
         {
             "role": "user",
-            "content": "Есть ли ибупрофен в аптеке и сколько он стоит?",
+            "content": "Сколько нурофена можно ребёнку 4 лет?",
         },
     ]
 
@@ -150,6 +158,30 @@ def main() -> None:
                 },
             },
         },
+        {
+            "type": "function",
+            "function": {
+                "name": "escalate_to_pharmacist",
+                "description": (
+                    "Передает запрос фармацевту и завершает работу агента. "
+                    "Используй этот инструмент, если пользователь просит "
+                    "подобрать дозировку лекарства для ребенка или запрос "
+                    "требует индивидуального решения медицинского специалиста."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "reason": {
+                            "type": "string",
+                            "description": (
+                                "Краткая причина передачи запроса фармацевту."
+                            ),
+                        }
+                    },
+                    "required": ["reason"],
+                },
+            },
+        },
     ]
 
     max_steps = 5
@@ -190,6 +222,8 @@ def main() -> None:
                 tool_result = check_interaction(arguments["drug_a"], arguments["drug_b"])
             elif tool_name == "pharmacy_inventory":
                 tool_result = pharmacy_inventory(arguments["drug_name"])
+            elif tool_name == "escalate_to_pharmacist":
+                tool_result = escalate_to_pharmacist(arguments["reason"])
             else:
                 tool_result = f"Error: Unknown tool '{tool_name}' called."
 
@@ -202,6 +236,10 @@ def main() -> None:
                     "content": tool_result,
                 }
             )
+
+            if tool_name == "escalate_to_pharmacist":
+                print("Escalation:", tool_result)
+                return
 
     raise RuntimeError("Agent did not complete its task within the allowed number of steps.")
 
