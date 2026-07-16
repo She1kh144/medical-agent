@@ -12,8 +12,8 @@ def medical_rag_search(query: str) -> str:
         params={"query": query, "k": 5},
         timeout=30,
     )
-
     response.raise_for_status()
+
     data = response.json()
 
     return json.dumps(data, ensure_ascii=False)
@@ -25,6 +25,28 @@ def check_interaction(drug_a: str, drug_b: str) -> str:
     )
 
     return medical_rag_search(query)
+
+def pharmacy_inventory(drug: str) -> str:
+    base_url = "http://localhost:8001"
+
+    stock_response = requests.get(
+        f"{base_url}/stock/{drug}",
+        timeout=10,
+    )
+    stock_response.raise_for_status()
+
+    price_response = requests.get(
+        f"{base_url}/price/{drug}",
+        timeout=10,
+    )
+    price_response.raise_for_status()
+
+    result = {
+        "stock": stock_response.json(),
+        "price": price_response.json(),
+    }
+
+    return json.dumps(result, ensure_ascii=False)
 
 def main() -> None:
     # Load environment variables from .env file
@@ -53,7 +75,7 @@ def main() -> None:
         },
         {
             "role": "user",
-            "content": "Можно ли принимать ибупрофен вместе с аспирином?",
+            "content": "Есть ли ибупрофен в аптеке и сколько он стоит?",
         },
     ]
 
@@ -106,6 +128,28 @@ def main() -> None:
                 },
             },
         },
+        {
+            "type": "function",
+            "function": {
+                "name": "pharmacy_inventory",
+                "description": (
+                    "Проверяет наличие и цену лекарственного препарата "
+                    "в аптеке. Используй этот инструмент, когда пользователь "
+                    "спрашивает, есть ли препарат в наличии, сколько единиц "
+                    "осталось или сколько он стоит."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "drug_name": {
+                            "type": "string",
+                            "description": "Название лекарственного препарата.",
+                        }
+                    },
+                    "required": ["drug_name"],
+                },
+            },
+        },
     ]
 
     max_steps = 5
@@ -144,6 +188,8 @@ def main() -> None:
                 tool_result = medical_rag_search(arguments["query"])
             elif tool_name == "check_interaction":
                 tool_result = check_interaction(arguments["drug_a"], arguments["drug_b"])
+            elif tool_name == "pharmacy_inventory":
+                tool_result = pharmacy_inventory(arguments["drug_name"])
             else:
                 tool_result = f"Error: Unknown tool '{tool_name}' called."
 
