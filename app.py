@@ -26,17 +26,17 @@ def check_interaction(drug_a: str, drug_b: str) -> str:
 
     return medical_rag_search(query)
 
-def pharmacy_inventory(drug: str) -> str:
+def pharmacy_inventory(drug_name: str) -> str:
     base_url = "http://localhost:8001"
 
     stock_response = requests.get(
-        f"{base_url}/stock/{drug}",
+        f"{base_url}/stock/{drug_name}",
         timeout=10,
     )
     stock_response.raise_for_status()
 
     price_response = requests.get(
-        f"{base_url}/price/{drug}",
+        f"{base_url}/price/{drug_name}",
         timeout=10,
     )
     price_response.raise_for_status()
@@ -70,9 +70,9 @@ def main() -> None:
             "role": "system",
             "content": (
                 "Ты — помощник по медицинской информации. "
-                "Перед ответом выбери подходящий из доступных инструментов. "
+                "Перед ответом выбери один или несколько подходящих инструментов."
                 "Отвечай только на основании медицинских фактов, содержащихся "
-                "в результате инструмента. Не используй свои внутренние знания. "   
+                "в результатах инструментов. Не используй свои внутренние знания. "   
                 "Если результат не содержит медицинских фактов, ответь точно: "
                 "'В предоставленных документах нет ответа на этот вопрос'"
 
@@ -83,7 +83,7 @@ def main() -> None:
         },
         {
             "role": "user",
-            "content": "Сколько нурофена можно ребёнку 4 лет?",
+            "content": "У меня болит голова и я кормлю грудью, что можно принять?"
         },
     ]
 
