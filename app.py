@@ -4,9 +4,11 @@ import requests
 from dotenv import load_dotenv
 from typing import cast
 from openai import OpenAI
+from datetime import UTC, datetime
 from openai.types.chat import ChatCompletionMessageParam, ChatCompletionToolUnionParam, ChatCompletionMessageFunctionToolCall
 
 def medical_rag_search(query: str) -> str:
+    """Performs a search in the medical knowledge base using the provided query."""
     response = requests.get(
         "http://localhost:8000/search",
         params={"query": query, "k": 5},
@@ -19,6 +21,7 @@ def medical_rag_search(query: str) -> str:
     return json.dumps(data, ensure_ascii=False)
 
 def check_interaction(drug_a: str, drug_b: str) -> str:
+    """Checks for known interactions between two drugs in the medical knowledge base."""
     query = (
         f"Взаимодействие препаратов {drug_a} и {drug_b}. "
         "Совместное применение, противопоказания и возможные риски."
@@ -27,6 +30,7 @@ def check_interaction(drug_a: str, drug_b: str) -> str:
     return medical_rag_search(query)
 
 def pharmacy_inventory(drug_name: str) -> str:
+    """Checks the availability and price of a drug in the pharmacy."""
     base_url = "http://localhost:8001"
 
     stock_response = requests.get(
@@ -49,12 +53,31 @@ def pharmacy_inventory(drug_name: str) -> str:
     return json.dumps(result, ensure_ascii=False)
 
 def escalate_to_pharmacist(reason: str) -> str:
+    """Escalates the request to a pharmacist with the provided reason."""
     result = {
         "outcome": "escalate",
         "reason": reason,
     }
 
     return json.dumps(result, ensure_ascii=False)
+
+def save_trace(messages: list[ChatCompletionMessageParam], outcome: str, steps: int) -> None:
+    """Saves the trace of the agent's execution to a JSONL file."""
+    trace_directory = "traces"
+    os.makedirs(trace_directory, exist_ok=True)
+
+    record = {
+        "timestamp": datetime.now(UTC).isoformat(),
+        "outcome": outcome,
+        "steps": steps,
+        "messages": messages,
+    }
+
+    # jsonl format: each record is a single line in the file
+    trace_path = os.path.join(trace_directory, "runs.jsonl")
+
+    with open(trace_path, "a", encoding="utf-8") as file:
+        file.write(json.dumps(record, ensure_ascii=False) + "\n")
 
 def main() -> None:
     # Load environment variables from .env file
@@ -202,6 +225,7 @@ def main() -> None:
         messages.append(cast(ChatCompletionMessageParam, message.model_dump(exclude_none=True))) # To satisfy type checker
 
         if not message.tool_calls:
+            save_trace(messages=messages, outcome="completed", steps=step)
             print("Final answer:", message.content)
             return
 
@@ -227,8 +251,6 @@ def main() -> None:
             else:
                 tool_result = f"Error: Unknown tool '{tool_name}' called."
 
-            #print("Tool result:", tool_result) # Prints raw chunks
-
             messages.append(
                 {
                     "role": "tool",
@@ -238,9 +260,11 @@ def main() -> None:
             )
 
             if tool_name == "escalate_to_pharmacist":
+                save_trace(messages=messages, outcome="escalated", steps=step)
                 print("Escalation:", tool_result)
                 return
 
+    save_trace(messages=messages, outcome="timeout", steps=max_steps)
     raise RuntimeError("Agent did not complete its task within the allowed number of steps.")
 
 if __name__ == "__main__":
