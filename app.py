@@ -61,7 +61,7 @@ def escalate_to_pharmacist(reason: str) -> str:
 
     return json.dumps(result, ensure_ascii=False)
 
-def save_trace(messages: list[ChatCompletionMessageParam], outcome: str, steps: int) -> None:
+def save_trace(messages: list[ChatCompletionMessageParam], outcome: str, steps: int) -> dict[str, object]:
     """Saves the trace of the agent's execution to a JSONL file."""
     trace_directory = "traces"
     os.makedirs(trace_directory, exist_ok=True)
@@ -79,8 +79,10 @@ def save_trace(messages: list[ChatCompletionMessageParam], outcome: str, steps: 
     with open(trace_path, "a", encoding="utf-8") as file:
         file.write(json.dumps(record, ensure_ascii=False) + "\n")
 
-def main() -> None:
-    # Load environment variables from .env file
+    return record
+
+def run_agent(user_question: str) -> dict[str, object]:
+    """Runs the agent with the provided user question and returns the trace of execution."""
     load_dotenv()
 
     client = OpenAI(
@@ -106,7 +108,7 @@ def main() -> None:
         },
         {
             "role": "user",
-            "content": "У меня болит голова и я кормлю грудью, что можно принять?"
+            "content": user_question,
         },
     ]
 
@@ -217,7 +219,6 @@ def main() -> None:
             messages=messages,
             tools=tools,
             temperature=0,
-            max_tokens=500,
             extra_body={"thinking": {"type": "disabled"}},
         )
 
@@ -225,9 +226,9 @@ def main() -> None:
         messages.append(cast(ChatCompletionMessageParam, message.model_dump(exclude_none=True))) # To satisfy type checker
 
         if not message.tool_calls:
-            save_trace(messages=messages, outcome="completed", steps=step)
+            trace = save_trace(messages=messages, outcome="answer", steps=step)
             print("Final answer:", message.content)
-            return
+            return trace
 
         for tool_call in message.tool_calls:
             tool_call = cast(ChatCompletionMessageFunctionToolCall, tool_call)
@@ -260,12 +261,20 @@ def main() -> None:
             )
 
             if tool_name == "escalate_to_pharmacist":
-                save_trace(messages=messages, outcome="escalated", steps=step)
+                trace = save_trace(messages=messages, outcome="escalate", steps=step)
                 print("Escalation:", tool_result)
-                return
+                return trace
 
     save_trace(messages=messages, outcome="timeout", steps=max_steps)
     raise RuntimeError("Agent did not complete its task within the allowed number of steps.")
+
+def main() -> None:
+    user_question = (
+        "Как действует ибупрофен, можно ли принимать его вместе "
+        "с аспирином и есть ли ибупрофен в аптеке? Сколько он стоит?"
+    )
+
+    run_agent(user_question)
 
 if __name__ == "__main__":
     main()
