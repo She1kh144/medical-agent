@@ -7,10 +7,14 @@ from openai import OpenAI
 from datetime import UTC, datetime
 from openai.types.chat import ChatCompletionMessageParam, ChatCompletionToolUnionParam, ChatCompletionMessageFunctionToolCall
 
+load_dotenv()
+
 def medical_rag_search(query: str) -> str:
     """Performs a search in the medical knowledge base using the provided query."""
+    base_url = "http://localhost:8000"
+
     response = requests.get(
-        "http://localhost:8000/search",
+        f"{base_url}/search",
         params={"query": query, "k": 5},
         timeout=30,
     )
@@ -61,6 +65,31 @@ def escalate_to_pharmacist(reason: str) -> str:
 
     return json.dumps(result, ensure_ascii=False)
 
+# 4 tools are registered in the TOOL_REGISTRY for easy access
+TOOL_REGISTRY = {
+    "medical_rag_search": medical_rag_search,
+    "check_interaction": check_interaction,
+    "pharmacy_inventory": pharmacy_inventory,
+    "escalate_to_pharmacist": escalate_to_pharmacist,
+}
+
+def execute_tool(tool_name: str, raw_arguments: str) -> str:
+    """Executes a tool by name and always returns a string for the model, never raises."""
+    tool = TOOL_REGISTRY.get(tool_name)
+
+    if tool is None:
+        return json.dumps({"error": "unknown_tool", "tool": tool_name}, ensure_ascii=False)
+
+    try:
+        arguments = json.loads(raw_arguments)
+        return tool(**arguments)
+    except json.JSONDecodeError as error:
+        return json.dumps({"error": "invalid_arguments_json", "tool": tool_name, "detail": str(error)}, ensure_ascii=False)
+    except TypeError as error:
+        return json.dumps({"error": "invalid_arguments", "tool": tool_name, "detail": str(error)}, ensure_ascii=False)
+    except requests.RequestException as error:
+        return json.dumps({"error": "tool_unavailable", "tool": tool_name, "detail": str(error)}, ensure_ascii=False)
+
 def save_trace(messages: list[ChatCompletionMessageParam], outcome: str, steps: int) -> dict[str, object]:
     """Saves the trace of the agent's execution to a JSONL file."""
     trace_directory = "traces"
@@ -83,8 +112,6 @@ def save_trace(messages: list[ChatCompletionMessageParam], outcome: str, steps: 
 
 def run_agent(user_question: str) -> dict[str, object]:
     """Runs the agent with the provided user question and returns the trace of execution."""
-    load_dotenv()
-
     client = OpenAI(
         api_key=os.environ.get("DEEPSEEK_API_KEY"),
         base_url="https://api.deepseek.com",
@@ -95,11 +122,11 @@ def run_agent(user_question: str) -> dict[str, object]:
             "role": "system",
             "content": (
                 "Ты — помощник по медицинской информации. "
-                "Перед ответом выбери один или несколько подходящих инструментов."
+                "Перед ответом выбери один или несколько подходящих инструментов. "
                 "Отвечай только на основании медицинских фактов, содержащихся "
                 "в результатах инструментов. Не используй свои внутренние знания. "   
                 "Если результат не содержит медицинских фактов, ответь точно: "
-                "'В предоставленных документах нет ответа на этот вопрос'"
+                "'В предоставленных документах нет ответа на этот вопрос' "
 
                 "Не придумывай информацию, отсутствующую в контексте. "
                 "В конце ответа укажи источник из предоставленного контекста (не придумывай источники). "
@@ -219,6 +246,7 @@ def run_agent(user_question: str) -> dict[str, object]:
             messages=messages,
             tools=tools,
             temperature=0,
+            max_tokens=1000,
             extra_body={"thinking": {"type": "disabled"}},
         )
 
@@ -230,27 +258,18 @@ def run_agent(user_question: str) -> dict[str, object]:
             print("Final answer:", message.content)
             return trace
 
+        escalation_result = None
+
         for tool_call in message.tool_calls:
             tool_call = cast(ChatCompletionMessageFunctionToolCall, tool_call)
 
             tool_name = tool_call.function.name
             raw_arguments = tool_call.function.arguments
 
-            arguments = json.loads(raw_arguments)
-
             print("Tool name:", tool_name)
             print("Arguments:", raw_arguments)
 
-            if tool_name == "medical_rag_search":
-                tool_result = medical_rag_search(arguments["query"])
-            elif tool_name == "check_interaction":
-                tool_result = check_interaction(arguments["drug_a"], arguments["drug_b"])
-            elif tool_name == "pharmacy_inventory":
-                tool_result = pharmacy_inventory(arguments["drug_name"])
-            elif tool_name == "escalate_to_pharmacist":
-                tool_result = escalate_to_pharmacist(arguments["reason"])
-            else:
-                tool_result = f"Error: Unknown tool '{tool_name}' called."
+            tool_result = execute_tool(tool_name, raw_arguments)
 
             messages.append(
                 {
@@ -261,9 +280,13 @@ def run_agent(user_question: str) -> dict[str, object]:
             )
 
             if tool_name == "escalate_to_pharmacist":
-                trace = save_trace(messages=messages, outcome="escalate", steps=step)
-                print("Escalation:", tool_result)
-                return trace
+                escalation_result = tool_result
+
+        # Escalate and return the trace only when all required tools have been executed 
+        if escalation_result is not None:
+            trace = save_trace(messages=messages, outcome="escalate", steps=step)
+            print("Escalation result:", escalation_result)
+            return trace
 
     save_trace(messages=messages, outcome="timeout", steps=max_steps)
     raise RuntimeError("Agent did not complete its task within the allowed number of steps.")
