@@ -73,8 +73,24 @@ TOOL_REGISTRY = {
     "escalate_to_pharmacist": escalate_to_pharmacist,
 }
 
-def execute_tool(tool_name: str, raw_arguments: str) -> str:
+def execute_tool(
+    tool_name: str,
+    raw_arguments: str,
+    fail_map: dict[str, str] | None = None,
+    poison_map: dict[str, str] | None = None,
+) -> str:
     """Executes a tool by name and always returns a string for the model, never raises."""
+    # Simulate tool failures based on the fail_map
+    if fail_map and tool_name in fail_map:
+        mode = fail_map[tool_name]
+
+        if mode == "timeout":
+            detail = "HTTPConnectionPool(host='localhost'): Read timed out. (read timeout=30)"
+        else:
+            detail = "500 Server Error: Internal Server Error"
+
+        return json.dumps({"error": "tool_unavailable", "tool": tool_name, "detail": detail}, ensure_ascii=False)
+    
     tool = TOOL_REGISTRY.get(tool_name)
 
     if tool is None:
@@ -82,15 +98,25 @@ def execute_tool(tool_name: str, raw_arguments: str) -> str:
 
     try:
         arguments = json.loads(raw_arguments)
-        return tool(**arguments)
+        tool_result = tool(**arguments)
     except json.JSONDecodeError as error:
         return json.dumps({"error": "invalid_arguments_json", "tool": tool_name, "detail": str(error)}, ensure_ascii=False)
     except TypeError as error:
         return json.dumps({"error": "invalid_arguments", "tool": tool_name, "detail": str(error)}, ensure_ascii=False)
     except requests.RequestException as error:
         return json.dumps({"error": "tool_unavailable", "tool": tool_name, "detail": str(error)}, ensure_ascii=False)
+    
+    if poison_map and tool_name in poison_map:
+        tool_result = tool_result + poison_map[tool_name]
+    
+    return tool_result
 
-def save_trace(messages: list[ChatCompletionMessageParam], outcome: str, steps: int) -> dict[str, object]:
+def save_trace(
+    messages: list[ChatCompletionMessageParam],
+    outcome: str,
+    steps: int,
+    run_label: str | None = None,
+) -> dict[str, object]:
     """Saves the trace of the agent's execution to a JSONL file."""
     trace_directory = "traces"
     os.makedirs(trace_directory, exist_ok=True)
@@ -100,6 +126,7 @@ def save_trace(messages: list[ChatCompletionMessageParam], outcome: str, steps: 
         "outcome": outcome,
         "steps": steps,
         "messages": messages,
+        "run_label": run_label,
     }
 
     # jsonl format: each record is a single line in the file
@@ -110,7 +137,12 @@ def save_trace(messages: list[ChatCompletionMessageParam], outcome: str, steps: 
 
     return record
 
-def run_agent(user_question: str) -> dict[str, object]:
+def run_agent(
+    user_question: str,
+    fail_map: dict[str, str] | None = None,
+    poison_map: dict[str, str] | None = None,
+    run_label: str | None = None,
+) -> dict[str, object]:
     """Runs the agent with the provided user question and returns the trace of execution."""
     client = OpenAI(
         api_key=os.environ.get("DEEPSEEK_API_KEY"),
@@ -254,7 +286,7 @@ def run_agent(user_question: str) -> dict[str, object]:
         messages.append(cast(ChatCompletionMessageParam, message.model_dump(exclude_none=True))) # To satisfy type checker
 
         if not message.tool_calls:
-            trace = save_trace(messages=messages, outcome="answer", steps=step)
+            trace = save_trace(messages=messages, outcome="answer", steps=step, run_label=run_label)
             print("Final answer:", message.content)
             return trace
 
@@ -269,7 +301,7 @@ def run_agent(user_question: str) -> dict[str, object]:
             print("Tool name:", tool_name)
             print("Arguments:", raw_arguments)
 
-            tool_result = execute_tool(tool_name, raw_arguments)
+            tool_result = execute_tool(tool_name, raw_arguments, fail_map, poison_map)
 
             messages.append(
                 {
@@ -284,11 +316,11 @@ def run_agent(user_question: str) -> dict[str, object]:
 
         # Escalate and return the trace only when all required tools have been executed 
         if escalation_result is not None:
-            trace = save_trace(messages=messages, outcome="escalate", steps=step)
+            trace = save_trace(messages=messages, outcome="escalate", steps=step, run_label=run_label)
             print("Escalation result:", escalation_result)
             return trace
 
-    save_trace(messages=messages, outcome="timeout", steps=max_steps)
+    save_trace(messages=messages, outcome="timeout", steps=max_steps, run_label=run_label)
     raise RuntimeError("Agent did not complete its task within the allowed number of steps.")
 
 def main() -> None:
