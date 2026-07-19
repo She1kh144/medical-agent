@@ -5,3 +5,4 @@ __pycache__/
 .vscode/
 exp.py
 traces/
+NOTES.md
