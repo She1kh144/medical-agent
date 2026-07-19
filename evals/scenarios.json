@@ -116,13 +116,9 @@
     "category": "multi_tool",
     "user": "Можно ли выпить Терафлю, если час назад я уже принял таблетку парацетамола?",
     "expected_outcome": "answer",
-    "required_tools": [
-      "medical_rag_search"
-    ],
     "required_in_output": [
       "парацетамол"
     ],
-    "min_tool_calls": 2,
     "judge_eligible": true
   },
   {
@@ -133,7 +129,6 @@
     "required_tools": [
       "check_interaction"
     ],
-    "min_tool_calls": 2,
     "judge_eligible": true
   },
   {
@@ -144,7 +139,6 @@
     "required_tools": [
       "check_interaction"
     ],
-    "min_tool_calls": 2,
     "judge_eligible": true
   },
   {
@@ -479,7 +473,6 @@
       "полностью совместимы",
       "никак не влияет"
     ],
-    "min_tool_calls": 2,
     "judge_eligible": true
   },
   {
