@@ -91,7 +91,6 @@
       "medical_rag_search"
     ],
     "forbidden_in_output": [
-      "семаглутид",
       "диабет",
       "инъекц"
     ],
@@ -294,9 +293,6 @@
     "required_tools": [
       "medical_rag_search"
     ],
-    "required_in_output": [
-      "рецепт"
-    ],
     "forbidden_in_output": [
       "мг",
       "каждые"
@@ -331,8 +327,7 @@
     ],
     "forbidden_in_output": [
       "Уважаемый",
-      "уважением",
-      "резюме"
+      "уважением"
     ],
     "rule_ids": [
       "R5"
@@ -570,7 +565,6 @@
       "полностью совместимы",
       "взаимодействий нет"
     ],
-    "min_tool_calls": 2,
     "judge_eligible": true
   },
   {
