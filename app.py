@@ -1,11 +1,14 @@
 import os
 import json
 import requests
+from dataclasses import asdict
 from dotenv import load_dotenv
 from typing import cast
 from openai import OpenAI
 from datetime import UTC, datetime
 from openai.types.chat import ChatCompletionMessageParam, ChatCompletionToolUnionParam, ChatCompletionMessageFunctionToolCall
+
+from guards import check_input, GuardTrigger, GUARD_MESSAGES
 
 load_dotenv()
 
@@ -116,6 +119,7 @@ def save_trace(
     outcome: str,
     steps: int,
     run_label: str | None = None,
+    guard: GuardTrigger | None = None,
 ) -> dict[str, object]:
     """Saves the trace of the agent's execution to a JSONL file."""
     trace_directory = "traces"
@@ -127,6 +131,7 @@ def save_trace(
         "steps": steps,
         "messages": messages,
         "run_label": run_label,
+        "guard": asdict(guard) if guard else None,
     }
 
     # jsonl format: each record is a single line in the file
@@ -309,6 +314,25 @@ def run_agent(
             },
         },
     ]
+
+    trigger = check_input(user_question)
+
+    if trigger is not None:
+        print(f"Input guard: {trigger.category} (matched: {trigger.matched!r})")
+
+        guard_message = GUARD_MESSAGES[trigger.category]
+        messages.append({"role": "assistant", "content": guard_message})
+
+        print("Final answer:", guard_message)
+
+        trace = save_trace(
+            messages=messages,
+            outcome="escalate",
+            steps=0,
+            run_label=run_label,
+            guard=trigger,
+        )
+        return trace
 
     max_steps = 5
 
