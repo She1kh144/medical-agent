@@ -3,7 +3,7 @@ import json
 import requests
 from dataclasses import asdict
 from dotenv import load_dotenv
-from typing import cast
+from typing import Callable, cast
 from openai import OpenAI
 from datetime import UTC, datetime
 from openai.types.chat import ChatCompletionMessageParam, ChatCompletionToolUnionParam, ChatCompletionMessageFunctionToolCall
@@ -147,8 +147,13 @@ def run_agent(
     fail_map: dict[str, str] | None = None,
     poison_map: dict[str, str] | None = None,
     run_label: str | None = None,
+    on_event: Callable[[str, dict], None] | None = None,
 ) -> dict[str, object]:
     """Runs the agent with the provided user question and returns the trace of execution."""
+    def emit(kind: str, payload: dict) -> None:
+        if on_event is not None:
+            on_event(kind, payload)
+
     client = OpenAI(
         api_key=os.environ.get("DEEPSEEK_API_KEY"),
         base_url="https://api.deepseek.com",
@@ -323,6 +328,8 @@ def run_agent(
         guard_message = GUARD_MESSAGES[trigger.category]
         messages.append({"role": "assistant", "content": guard_message})
 
+        emit("guard", {"category": trigger.category, "message": guard_message})
+
         print("Final answer:", guard_message)
 
         trace = save_trace(
@@ -337,6 +344,8 @@ def run_agent(
     max_steps = 5
 
     for step in range(1, max_steps + 1):
+        emit("step", {"step": step})
+
         print(f"\n--- Agent's step {step} ---")
 
         response = client.chat.completions.create(
@@ -353,6 +362,7 @@ def run_agent(
 
         if not message.tool_calls:
             trace = save_trace(messages=messages, outcome="answer", steps=step, run_label=run_label)
+            emit("answer", {"text": message.content or ""})
             print("Final answer:", message.content)
             return trace
 
@@ -369,6 +379,9 @@ def run_agent(
 
             tool_result = execute_tool(tool_name, raw_arguments, fail_map, poison_map)
 
+            emit("tool_call", {"tool": tool_name, "arguments": raw_arguments})
+            emit("tool_result", {"tool": tool_name, "result": tool_result})
+
             messages.append(
                 {
                     "role": "tool",
@@ -383,6 +396,7 @@ def run_agent(
         # Escalate and return the trace only when all required tools have been executed 
         if escalation_result is not None:
             trace = save_trace(messages=messages, outcome="escalate", steps=step, run_label=run_label)
+            emit("escalate", {"result": escalation_result})
             print("Escalation result:", escalation_result)
             return trace
 
