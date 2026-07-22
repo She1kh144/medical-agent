@@ -2,7 +2,7 @@ import json
 import queue
 import threading
 from fastapi import FastAPI
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 
 from app import run_agent
@@ -15,6 +15,10 @@ class RunRequest(BaseModel):
 
 def sse_message(event: str, payload: dict) -> str:
     return f"event: {event}\ndata: {json.dumps(payload, ensure_ascii=False)}\n\n"
+
+@app.get("/")
+def serve_index() -> FileResponse:
+    return FileResponse("static/index.html")
 
 @app.post("/run")
 def run(request: RunRequest) -> dict[str, object]:

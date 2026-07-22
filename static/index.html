@@ -1,0 +1,690 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Medical Agent</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dompurify/dist/purify.min.js"></script>
+  <style>
+    /* === Color variables === */
+    :root {
+      --bg-page: #f5f5f5;
+      --bg-container: #ffffff;
+      --bg-input: #f8fafc;
+      --bg-source: #dbeafe;
+      --bg-example-hover: #f8fafc;
+
+      --text-primary: #0f172a;
+      --text-secondary: #64748b;
+      --text-muted: #94a3b8;
+      --text-label: #94a3b8;
+      --text-example: #475569;
+      --text-footer: #64748b;
+      --text-source: #1e3a8a;
+
+      --border-default: #e5e7eb;
+      --border-input: #cbd5e1;
+      --border-footer-link: #cbd5e1;
+
+      --accent: #1e40af;
+      --accent-hover: #1e3a8a;
+      --accent-focus-ring: rgba(30, 64, 175, 0.1);
+
+      --btn-text: #ffffff;
+      --btn-disabled-bg: #94a3b8;
+
+      --mono: 'JetBrains Mono', ui-monospace, monospace;
+      --timeline-line: #e2e8f0;
+      --bg-event: #f8fafc;
+      --escalate: #b45309;
+      --bg-escalate: #fef3c7;
+      --ok: #15803d;
+      --bg-ok: #dcfce7;
+    }
+
+    :root.dark {
+      --bg-page: #0f172a;
+      --bg-container: #1e293b;
+      --bg-input: #0f172a;
+      --bg-source: #1e3a5f;
+      --bg-example-hover: #233044;
+
+      --text-primary: #f1f5f9;
+      --text-secondary: #94a3b8;
+      --text-muted: #64748b;
+      --text-label: #64748b;
+      --text-example: #cbd5e1;
+      --text-footer: #94a3b8;
+      --text-source: #93c5fd;
+
+      --border-default: #334155;
+      --border-input: #334155;
+      --border-footer-link: #334155;
+
+      --accent: #3b82f6;
+      --accent-hover: #60a5fa;
+      --accent-focus-ring: rgba(59, 130, 246, 0.15);
+
+      --btn-text: #f1f5f9;
+      --btn-disabled-bg: #475569;
+
+      --timeline-line: #334155;
+      --bg-event: #0f172a;
+      --escalate: #fbbf24;
+      --bg-escalate: #3a2f14;
+      --ok: #4ade80;
+      --bg-ok: #14321f;
+    }
+
+    /* === Reset & base === */
+    *, *::before, *::after { box-sizing: border-box; }
+    body, h1, h2, p, button, input, textarea {
+      margin: 0; padding: 0;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+
+    body {
+      background: var(--bg-page);
+      color: var(--text-primary);
+      min-height: 100vh;
+      padding: 40px 20px;
+      transition: background 0.2s, color 0.2s;
+    }
+
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+      background: var(--bg-container);
+      border: 1px solid var(--border-default);
+      border-radius: 8px;
+      padding: 40px 48px;
+      transition: background 0.2s, border-color 0.2s;
+    }
+
+    /* === Header === */
+    .header h1 {
+      font-size: 24px;
+      font-weight: 500;
+      letter-spacing: -0.01em;
+      color: var(--text-primary);
+      margin-bottom: 6px;
+    }
+    .header .subtitle {
+      color: var(--text-secondary);
+      font-size: 14px;
+      margin-bottom: 32px;
+    }
+
+    /* === Theme toggle === */
+    .header { position: relative; }
+    .theme-toggle {
+      position: absolute;
+      top: 0;
+      right: 0;
+      width: 36px;
+      height: 36px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: transparent;
+      border: 1px solid var(--border-default);
+      border-radius: 6px;
+      color: var(--text-secondary);
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .theme-toggle:hover {
+      color: var(--accent);
+      border-color: var(--accent);
+    }
+    .theme-toggle .icon-moon { display: none; }
+    :root.dark .theme-toggle .icon-sun { display: none; }
+    :root.dark .theme-toggle .icon-moon { display: inline-block; }
+
+    /* === Form === */
+    .form { display: flex; flex-direction: column; gap: 12px; }
+
+    textarea {
+      width: 100%;
+      min-height: 80px;
+      padding: 14px 18px;
+      border: 1px solid var(--border-input);
+      background: var(--bg-input);
+      border-radius: 6px;
+      font-size: 15px;
+      color: var(--text-primary);
+      resize: vertical;
+      font-family: inherit;
+      line-height: 1.5;
+      transition: background 0.2s, border-color 0.2s, color 0.2s;
+    }
+    textarea::placeholder { color: var(--text-muted); }
+    textarea:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-focus-ring);
+    }
+
+    .submit-btn {
+      align-self: flex-start;
+      background: var(--accent);
+      color: var(--btn-text);
+      border: none;
+      padding: 10px 22px;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .submit-btn:hover:not(:disabled) { background: var(--accent-hover); }
+    .submit-btn:disabled { background: var(--btn-disabled-bg); cursor: not-allowed; }
+
+    /* === Answer area === */
+    .answer-section {
+      display: none;
+      margin-top: 32px;
+      padding-top: 28px;
+      border-top: 1px solid var(--border-default);
+    }
+    .answer-section.visible { display: block; }
+
+    .answer-label {
+      color: var(--text-label);
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      margin-bottom: 12px;
+    }
+    .answer-text {
+      color: var(--text-primary);
+      font-size: 15px;
+      line-height: 1.7;
+      margin-bottom: 20px;
+      min-height: 24px;
+    }
+    .answer-text p { margin-bottom: 12px; }
+    .answer-text p:last-child { margin-bottom: 0; }
+    .answer-text strong { font-weight: 500; color: var(--text-primary); }
+    .answer-text ul, .answer-text ol {
+      margin: 8px 0 12px 24px;
+    }
+    .answer-text li { margin-bottom: 4px; }
+
+    .sources {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-bottom: 18px;
+    }
+    .source-tag {
+      font-size: 12px;
+      color: var(--text-source);
+      background: var(--bg-source);
+      padding: 4px 12px;
+      border-radius: 12px;
+    }
+
+    .disclaimer {
+      color: var(--text-muted);
+      font-size: 12px;
+      font-style: italic;
+    }
+
+    /* === Trace timeline === */
+    .trace {
+      display: none;
+      position: relative;
+      margin-top: 32px;
+      padding-left: 30px;
+    }
+    .trace.visible { display: block; }
+    .trace::before {
+      content: '';
+      position: absolute;
+      left: 10px;
+      top: 10px;
+      bottom: 10px;
+      width: 2px;
+      background: var(--timeline-line);
+    }
+
+    .event {
+      position: relative;
+      margin-bottom: 16px;
+      animation: rise 0.25s ease both;
+    }
+    .event::before {
+      content: '';
+      position: absolute;
+      left: -24px;
+      top: 5px;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--bg-container);
+      border: 2px solid var(--accent);
+    }
+    .event.amber::before { border-color: var(--escalate); }
+
+    @keyframes rise {
+      from { opacity: 0; transform: translateY(6px); }
+      to   { opacity: 1; transform: none; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .event { animation: none; }
+      .loading-dots span { animation: none; }
+    }
+
+    .event-label {
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-label);
+      margin-bottom: 6px;
+    }
+
+    .tool-card {
+      background: var(--bg-event);
+      border: 1px solid var(--border-default);
+      border-radius: 6px;
+      padding: 12px 16px;
+    }
+    .tool-name {
+      font-family: var(--mono);
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--accent);
+    }
+    .tool-args {
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--text-secondary);
+      margin-top: 4px;
+      word-break: break-word;
+    }
+    .tool-card details { margin-top: 8px; }
+    .tool-card summary {
+      cursor: pointer;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+    .tool-result {
+      font-family: var(--mono);
+      font-size: 12px;
+      line-height: 1.6;
+      white-space: pre-wrap;
+      word-break: break-word;
+      color: var(--text-secondary);
+      max-height: 260px;
+      overflow-y: auto;
+      margin-top: 8px;
+    }
+
+    .guard-banner {
+      background: var(--bg-escalate);
+      border: 1px solid var(--escalate);
+      border-radius: 6px;
+      padding: 14px 18px;
+      font-size: 14px;
+      line-height: 1.6;
+      color: var(--text-primary);
+      white-space: pre-line;
+    }
+
+    .outcome-badge {
+      display: inline-block;
+      font-size: 12px;
+      font-weight: 500;
+      padding: 3px 12px;
+      border-radius: 12px;
+      margin-left: 8px;
+    }
+    .outcome-badge.answer   { color: var(--ok);       background: var(--bg-ok); }
+    .outcome-badge.escalate { color: var(--escalate); background: var(--bg-escalate); }
+
+    /* === Mobile === */
+    @media (max-width: 640px) {
+      body { padding: 20px 12px; }
+      .container { padding: 24px 20px; border-radius: 6px; }
+      .header h1 { font-size: 20px; }
+      textarea { font-size: 16px; }
+    }
+
+    /* === Loading indicator === */
+    .loading-dots {
+      display: inline-flex;
+      gap: 4px;
+      align-items: center;
+    }
+    .loading-dots span {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--text-muted);
+      animation: pulse 1.4s ease-in-out infinite;
+    }
+    .loading-dots span:nth-child(2) { animation-delay: 0.2s; }
+    .loading-dots span:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes pulse {
+      0%, 80%, 100% { opacity: 0.3; transform: scale(0.8); }
+      40% { opacity: 1; transform: scale(1); }
+    }
+
+    /* === Example questions === */
+    .examples {
+      margin-top: 20px;
+    }
+    .examples-label {
+      color: var(--text-label);
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      margin-bottom: 10px;
+    }
+    .example-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .example-item {
+      text-align: left;
+      background: none;
+      border: 1px solid var(--border-default);
+      border-radius: 6px;
+      padding: 10px 14px;
+      font-size: 14px;
+      color: var(--text-example);
+      cursor: pointer;
+      font-family: inherit;
+      transition: all 0.15s;
+    }
+    .example-item:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+      background: var(--bg-example-hover);
+    }
+
+    /* === Footer === */
+    .footer {
+      max-width: 800px;
+      margin: 20px auto 0;
+      text-align: center;
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+    .footer a {
+      color: var(--text-footer);
+      text-decoration: none;
+      border-bottom: 1px solid var(--border-footer-link);
+      padding-bottom: 1px;
+      transition: color 0.15s;
+    }
+    .footer a:hover {
+      color: var(--accent);
+      border-bottom-color: var(--accent);
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <button class="theme-toggle" id="theme-toggle" type="button" aria-label="Переключить тему">
+        <svg class="icon-sun" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
+        <svg class="icon-moon" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
+      </button>
+      <h1>Medical Agent</h1>
+      <p class="subtitle">Агент-ассистент по препаратам</p>
+    </div>
+
+    <form class="form" id="ask-form">
+      <textarea
+        id="query"
+        placeholder="Задайте вопрос о препарате..."
+        required
+      ></textarea>
+      <button type="submit" class="submit-btn" id="submit-btn">Спросить</button>
+    </form>
+
+    <div class="examples" id="examples">
+      <p class="examples-label">Примеры вопросов</p>
+      <div class="example-list">
+        <button class="example-item" type="button">Можно ли принимать ибупрофен вместе с эналаприлом?</button>
+        <button class="example-item" type="button">Принимаю аторвастатин, врач назначил Сумамед. Они совместимы?</button>
+        <button class="example-item" type="button">Есть ли глицин в аптеке и сколько он стоит?</button>
+        <button class="example-item" type="button">Ребёнку 5 лет, температура. Сколько парацетамола можно дать?</button>
+      </div>
+    </div>
+
+    <div class="trace" id="trace"></div>
+
+    <div class="answer-section" id="answer-section">
+      <p class="answer-label">Ответ<span class="outcome-badge" id="outcome-badge"></span></p>
+      <p class="answer-text" id="answer-text"></p>
+      <p class="disclaimer">Это не медицинская консультация, обратитесь к врачу.</p>
+    </div>
+  </div>
+
+  <footer class="footer">
+    <a href="https://github.com/She1kh144/medical-agent" target="_blank" rel="noopener">GitHub</a>
+  </footer>
+
+  <script>
+    const form = document.getElementById('ask-form');
+    const queryEl = document.getElementById('query');
+    const submitBtn = document.getElementById('submit-btn');
+    const examples = document.getElementById('examples');
+    const trace = document.getElementById('trace');
+    const answerSection = document.getElementById('answer-section');
+    const answerTextEl = document.getElementById('answer-text');
+    const outcomeBadge = document.getElementById('outcome-badge');
+
+    // === Theme (unchanged from the RAG page) ===
+    const themeToggle = document.getElementById('theme-toggle');
+    const root = document.documentElement;
+    const storedTheme = localStorage.getItem('theme');
+    const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    if (storedTheme === 'dark' || (!storedTheme && systemPrefersDark)) root.classList.add('dark');
+    themeToggle.addEventListener('click', () => {
+      root.classList.toggle('dark');
+      localStorage.setItem('theme', root.classList.contains('dark') ? 'dark' : 'light');
+    });
+
+    function renderMarkdown(md) {
+      return DOMPurify.sanitize(marked.parse(md));
+    }
+
+    // === Timeline ===
+    let pendingNode = null;
+    let lastToolCard = null;
+
+    function addEvent(label, { amber = false } = {}) {
+      const ev = document.createElement('div');
+      ev.className = 'event' + (amber ? ' amber' : '');
+      const lab = document.createElement('p');
+      lab.className = 'event-label';
+      lab.textContent = label;
+      ev.appendChild(lab);
+      trace.insertBefore(ev, pendingNode);
+      return ev;
+    }
+
+    function banner(text) {
+      const el = document.createElement('div');
+      el.className = 'guard-banner';
+      el.textContent = text;
+      return el;
+    }
+
+    function showPending() {
+      pendingNode = document.createElement('div');
+      pendingNode.className = 'event';
+      pendingNode.innerHTML =
+        '<span class="loading-dots"><span></span><span></span><span></span></span>';
+      trace.appendChild(pendingNode);
+    }
+
+    function removePending() {
+      if (pendingNode) { pendingNode.remove(); pendingNode = null; }
+    }
+
+    function prettyArgs(raw) {
+      try {
+        const obj = JSON.parse(raw);
+        return Object.entries(obj).map(([k, v]) => `${k}: ${JSON.stringify(v)}`).join('   ');
+      } catch { return raw; }
+    }
+
+    function prettyResult(raw) {
+      try { return JSON.stringify(JSON.parse(raw), null, 2); } catch { return raw; }
+    }
+
+    // === Event handlers: one per SSE event type ===
+    const handlers = {
+      step(p) {
+        addEvent(`Шаг ${p.step}`);
+      },
+      tool_call(p) {
+        if (p.tool === 'escalate_to_pharmacist') return;
+        const ev = addEvent('Вызов инструмента');
+        const card = document.createElement('div');
+        card.className = 'tool-card';
+        const name = document.createElement('div');
+        name.className = 'tool-name';
+        name.textContent = p.tool;
+        const args = document.createElement('div');
+        args.className = 'tool-args';
+        args.textContent = prettyArgs(p.arguments);
+        card.append(name, args);
+        ev.appendChild(card);
+        lastToolCard = card;
+      },
+      tool_result(p) {
+        if (p.tool === 'escalate_to_pharmacist') return;
+        if (!lastToolCard) return;
+        const details = document.createElement('details');
+        const summary = document.createElement('summary');
+        summary.textContent = 'Результат';
+        const body = document.createElement('div');
+        body.className = 'tool-result';
+        body.textContent = prettyResult(p.result);
+        details.append(summary, body);
+        lastToolCard.appendChild(details);
+        lastToolCard = null;
+      },
+      guard(p) {
+        const ev = addEvent('Защитный барьер', { amber: true });
+        ev.appendChild(banner(p.message));
+      },
+      escalate(p) {
+        let reason = 'Вопрос передан специалисту.';
+        try {
+          reason = JSON.parse(p.result).reason || reason;
+        } catch { /* keep fallback */ }
+        const ev = addEvent('Передано фармацевту', { amber: true });
+        ev.appendChild(banner(reason));
+      },
+      answer(p) {
+        answerSection.classList.add('visible');
+        answerTextEl.innerHTML = renderMarkdown(p.text);
+      },
+      error(p) {
+        const ev = addEvent('Ошибка', { amber: true });
+        ev.appendChild(banner(p.detail));
+      },
+      done(p) {
+        if (p.outcome === 'answer' && p.steps != null) {
+          outcomeBadge.className = 'outcome-badge answer';
+          outcomeBadge.textContent = `шагов: ${p.steps}`;
+        }
+        if (p.outcome === 'timeout') {
+          addEvent('Превышен лимит шагов', { amber: true });
+        }
+      },
+    };
+
+    // === Submit → stream → dispatch ===
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const question = queryEl.value.trim();
+      if (!question) return;
+
+      trace.replaceChildren();
+      trace.classList.add('visible');
+      answerSection.classList.remove('visible');
+      outcomeBadge.className = 'outcome-badge';
+      outcomeBadge.textContent = '';
+      examples.style.display = 'none';
+      lastToolCard = null;
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Работаю...';
+      showPending();
+
+      try {
+        const response = await fetch('/run/stream', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ question }),
+        });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+
+          let sep;
+          while ((sep = buffer.indexOf('\n\n')) !== -1) {
+            const raw = buffer.slice(0, sep);
+            buffer = buffer.slice(sep + 2);
+            handleSSE(raw);
+          }
+        }
+      } catch (err) {
+        handlers.error({ detail: err.message });
+      } finally {
+        removePending();
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Спросить';
+      }
+    });
+
+    function handleSSE(raw) {
+      let event = 'message';
+      let data = '';
+      for (const line of raw.split('\n')) {
+        if (line.startsWith('event: ')) event = line.slice(7);
+        else if (line.startsWith('data: ')) data = line.slice(6);
+      }
+      const handler = handlers[event];
+      if (handler) handler(data ? JSON.parse(data) : {});
+    }
+
+    // === Keyboard + examples (from the RAG page) ===
+    queryEl.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        form.requestSubmit();
+      }
+    });
+    document.querySelectorAll('.example-item').forEach((item) => {
+      item.addEventListener('click', () => {
+        queryEl.value = item.textContent;
+        form.requestSubmit();
+      });
+    });
+  </script>
+</body>
+</html>
